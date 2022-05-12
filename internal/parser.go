@@ -42,13 +42,13 @@ func generateArticleName(title string, date time.Time, config notion_blog.BlogCo
 			strings.ToLower(title),
 			"",
 		),
-		" ", "_",
+		" ", "-",
 	)
 	escapedFilename := escapedTitle + ".md"
 
 	if config.UseDateForFilename {
-	    // Add date to the name to allow repeated titles
-	    return date.Format("2006-01-02") + escapedFilename
+		// Add date to the name to allow repeated titles
+		return date.Format("2006-01-02") + escapedFilename
 	}
 	return escapedFilename
 }
@@ -152,7 +152,7 @@ func ParseAndGenerate(config notion_blog.BlogConfig) error {
 	changed := 0
 
 	for i, res := range q.Results {
-		title := notion_blog.ConvertRichText(res.Properties["Name"].(*notionapi.TitleProperty).Title)
+		title := res.Properties["Name"].(*notionapi.TitleProperty).Title[0].PlainText
 
 		fmt.Printf("-- Article [%d/%d] --\n", i+1, len(q.Results))
 		spin = spinner.StartNew("Getting blocks tree")

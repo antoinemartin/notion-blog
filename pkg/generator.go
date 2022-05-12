@@ -160,6 +160,35 @@ func Generate(w io.Writer, page notionapi.Page, blocks []notionapi.Block, config
 	return nil
 }
 
+func EmojiToName(emoji notionapi.Emoji) string {
+	switch emoji {
+	case "⚠️":
+		return "warning"
+	case "💡":
+		return "tip"
+	case "🐞":
+		return "bug"
+	case "❓", "❔":
+		return "question"
+	case "❌", "🧨", "💣":
+		return "failure"
+	case "✅", "🆗", "☑️", "✔️":
+		return "success"
+	case "☠️", "⛔", "🛑":
+		return "danger"
+	case "📋":
+		return "abstract"
+	case "💬":
+		return "quote"
+	case "ℹ️":
+		return "info"
+	case "✍️":
+		return "example"
+	default:
+		return "note"
+	}
+}
+
 func GenerateContent(w io.Writer, blocks []notionapi.Block, config BlogConfig, prefixes ...string) {
 	if len(blocks) == 0 {
 		return
@@ -190,19 +219,21 @@ func GenerateContent(w io.Writer, blocks []notionapi.Block, config BlogConfig, p
 		case *notionapi.Heading3Block:
 			fprintf(w, prefixes, "### %s", ConvertRichText(b.Heading3.Text))
 		case *notionapi.CalloutBlock:
+			// TODO: Instead of admonition, this should be {{<callout>}}
+			// And have the shortcode interpreted inside the hugo theme.
 			if !config.UseShortcodes {
 				continue
 			}
 			if b.Callout.Icon != nil {
 				if b.Callout.Icon.Emoji != nil {
-					fprintf(w, prefixes, `{{%% callout emoji="%s" %%}}`, *b.Callout.Icon.Emoji)
+					fprintf(w, prefixes, `{{< admonition %s >}}`, EmojiToName(*b.Callout.Icon.Emoji))
 				} else {
-					fprintf(w, prefixes, `{{%% callout image="%s" %%}}`, b.Callout.Icon.GetURL())
+					fprintf(w, prefixes, `{{< admonition note >}}`)
 				}
 			}
 			fprintln(w, prefixes, ConvertRichText(b.Callout.Text))
 			GenerateContent(w, b.Callout.Children, config, prefixes...)
-			fprintln(w, prefixes, "{{% /callout %}}")
+			fprintln(w, prefixes, "{{< /admonition >}}")
 
 		case *notionapi.BookmarkBlock:
 			if !config.UseShortcodes {
