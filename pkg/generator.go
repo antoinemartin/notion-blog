@@ -14,9 +14,46 @@ import (
 
 	"net/url"
 
+	"unicode"
+	"unicode/utf8"
+
+	"github.com/gosimple/slug"
 	"github.com/janeczku/go-spinner"
 	"github.com/jomei/notionapi"
 )
+
+func wordWrap(text string, lineWidth int, prefix string) string {
+	wrap := make([]byte, 0, len(text)+2*len(text)/lineWidth)
+	eoLine := lineWidth - len(prefix)
+	inWord := false
+	for i, j := 0, 0; ; {
+		r, size := utf8.DecodeRuneInString(text[i:])
+		if size == 0 && r == utf8.RuneError {
+			r = ' '
+		}
+		if unicode.IsSpace(r) {
+			if inWord {
+				if i > eoLine {
+					wrap = append(wrap, '\n')
+					eoLine = len(wrap) + lineWidth - len(prefix)
+					wrap = append(wrap, []byte(prefix)...)
+				} else if len(wrap) > 0 {
+					wrap = append(wrap, ' ')
+				}
+				wrap = append(wrap, text[j:i]...)
+			}
+			inWord = false
+		} else if !inWord {
+			inWord = true
+			j = i
+		}
+		if size == 0 && r == ' ' {
+			break
+		}
+		i += size
+	}
+	return string(wrap)
+}
 
 func emphFormat(a *notionapi.Annotations) (s string) {
 	s = "%s"
@@ -69,7 +106,7 @@ func ConvertRichText(t []notionapi.RichText) string {
 		buf.WriteString(ConvertRich(word))
 	}
 
-	return buf.String()
+	return strings.TrimSpace(buf.String())
 }
 
 func getImage(imgURL string, config BlogConfig) (_ string, err error) {
@@ -89,9 +126,9 @@ func getImage(imgURL string, config BlogConfig) (_ string, err error) {
 	defer func() {
 		spin.Stop()
 		if err != nil {
-			fmt.Println(fmt.Sprintf("❌ Getting image `%s`: %s", name, err))
+			fmt.Printf("❌ Getting image `%s`: %s\n", name, err)
 		} else {
-			fmt.Println(fmt.Sprintf("✔ Getting image `%s`: Completed", name))
+			fmt.Printf("✔ Getting image `%s`: Completed\n", name)
 		}
 	}()
 
@@ -128,6 +165,7 @@ func Generate(w io.Writer, page notionapi.Page, blocks []notionapi.Block, config
 		"div":    func(a, b int) int { return a / b },
 		"repeat": func(s string, n int) string { return strings.Repeat(s, n) },
 		"rich":   ConvertRichText,
+		"slug":   func(s string) string { return slug.Make(s) },
 	})
 
 	t, err := t.ParseFiles(config.ArchetypeFile)
@@ -187,7 +225,9 @@ func GenerateContent(w io.Writer, blocks []notionapi.Block, config BlogConfig, p
 	numberedList := false
 	bulletedList := false
 
-	for _, block := range blocks {
+	lastIndex := len(blocks) - 1
+
+	for blkIdx, block := range blocks {
 		// Add line break after list is finished
 		if bulletedList && block.GetType() != notionapi.BlockTypeBulletedListItem {
 			bulletedList = false
@@ -200,14 +240,21 @@ func GenerateContent(w io.Writer, blocks []notionapi.Block, config BlogConfig, p
 
 		switch b := block.(type) {
 		case *notionapi.ParagraphBlock:
-			fprintln(w, prefixes, ConvertRichText(b.Paragraph.Text)+"\n")
+			para := ConvertRichText(b.Paragraph.RichText)
+			if para != "" && para != "\n" {
+				fprintln(w, prefixes, wordWrap(para, 80, ""))
+				if blkIdx < lastIndex {
+					fprintf(w, prefixes, "")
+				}
+			}
+
 			GenerateContent(w, b.Paragraph.Children, config)
 		case *notionapi.Heading1Block:
-			fprintf(w, prefixes, "# %s", ConvertRichText(b.Heading1.Text))
+			fprintf(w, prefixes, "# %s\n", ConvertRichText(b.Heading1.RichText))
 		case *notionapi.Heading2Block:
-			fprintf(w, prefixes, "## %s", ConvertRichText(b.Heading2.Text))
+			fprintf(w, prefixes, "## %s\n", ConvertRichText(b.Heading2.RichText))
 		case *notionapi.Heading3Block:
-			fprintf(w, prefixes, "### %s", ConvertRichText(b.Heading3.Text))
+			fprintf(w, prefixes, "### %s\n", ConvertRichText(b.Heading3.RichText))
 		case *notionapi.CalloutBlock:
 			// TODO: Instead of admonition, this should be {{<callout>}}
 			// And have the shortcode interpreted inside the hugo theme.
@@ -216,14 +263,14 @@ func GenerateContent(w io.Writer, blocks []notionapi.Block, config BlogConfig, p
 			}
 			if b.Callout.Icon != nil {
 				if b.Callout.Icon.Emoji != nil {
-					fprintf(w, prefixes, `{{< admonition %s >}}`, EmojiToName(*b.Callout.Icon.Emoji))
+					fprintf(w, prefixes, "{{< admonition %s >}}\n", EmojiToName(*b.Callout.Icon.Emoji))
 				} else {
-					fprintf(w, prefixes, `{{< admonition note >}}`)
+					fprintf(w, prefixes, "{{< admonition note >}}\n")
 				}
 			}
-			fprintln(w, prefixes, ConvertRichText(b.Callout.Text))
+			fprintln(w, prefixes, ConvertRichText(b.Callout.RichText))
 			GenerateContent(w, b.Callout.Children, config, prefixes...)
-			fprintln(w, prefixes, "{{< /admonition >}}")
+			fprintln(w, prefixes, "{{< /admonition >}}\n")
 
 		case *notionapi.BookmarkBlock:
 			if !config.UseShortcodes {
@@ -247,26 +294,30 @@ func GenerateContent(w io.Writer, blocks []notionapi.Block, config BlogConfig, p
 			)
 
 		case *notionapi.QuoteBlock:
-			fprintf(w, prefixes, "> %s", ConvertRichText(b.Quote.Text))
+			fprintf(w, prefixes, "> %s", wordWrap(ConvertRichText(b.Quote.RichText), 80, strings.Join(append(prefixes, "> "), "")))
 			GenerateContent(w, b.Quote.Children, config,
 				append([]string{"> "}, prefixes...)...)
 			fprintln(w, prefixes)
 
 		case *notionapi.BulletedListItemBlock:
 			bulletedList = true
-			fprintf(w, prefixes, "- %s", ConvertRichText(b.BulletedListItem.Text))
+			fprintf(w, prefixes, "- %s", wordWrap(ConvertRichText(b.BulletedListItem.RichText), 80, strings.Join(append(prefixes, "  "), "")))
 			GenerateContent(w, b.BulletedListItem.Children, config,
 				append([]string{"    "}, prefixes...)...)
 
 		case *notionapi.NumberedListItemBlock:
 			numberedList = true
-			fprintf(w, prefixes, "1. %s", ConvertRichText(b.NumberedListItem.Text))
+			fprintf(w, prefixes, "1. %s", ConvertRichText(b.NumberedListItem.RichText))
 			GenerateContent(w, b.NumberedListItem.Children, config,
 				append([]string{"    "}, prefixes...)...)
 
 		case *notionapi.ImageBlock:
 			src, _ := getImage(b.Image.File.URL, config)
-			fprintf(w, prefixes, "![%s](%s)\n", ConvertRichText(b.Image.Caption), src)
+			caption := ConvertRichText(b.Image.Caption)
+			if caption == "" {
+				caption = "image"
+			}
+			fprintf(w, prefixes, "![%s](%s)\n", caption, src)
 
 		case *notionapi.CodeBlock:
 			if b.Code.Language == "plain text" {
@@ -274,8 +325,8 @@ func GenerateContent(w io.Writer, blocks []notionapi.Block, config BlogConfig, p
 			} else {
 				fprintf(w, prefixes, "```%s", b.Code.Language)
 			}
-			fprintln(w, prefixes, ConvertRichText(b.Code.Text))
-			fprintln(w, prefixes, "```")
+			fprintln(w, prefixes, ConvertRichText(b.Code.RichText))
+			fprintln(w, prefixes, "```\n")
 
 		case *notionapi.UnsupportedBlock:
 			if b.GetType() != "unsupported" {
@@ -283,6 +334,8 @@ func GenerateContent(w io.Writer, blocks []notionapi.Block, config BlogConfig, p
 			} else {
 				fmt.Println("ℹ Unsupported block type")
 			}
+		case *notionapi.DividerBlock:
+			fprintln(w, prefixes, "<!-- more -->\n")
 		default:
 			fmt.Println("ℹ Unimplemented block", b.GetType())
 		}
