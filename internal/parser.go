@@ -15,12 +15,12 @@ import (
 	"github.com/jomei/notionapi"
 )
 
-func filterFromConfig(config notion_blog.BlogConfig) *notionapi.CompoundFilter {
+func filterFromConfig(config notion_blog.BlogConfig) notionapi.Filter {
 	if config.FilterProp == "" || len(config.FilterValue) == 0 {
 		return nil
 	}
 
-	properties := make([]notionapi.PropertyFilter, len(config.FilterValue))
+	properties := make(notionapi.OrCompoundFilter, len(config.FilterValue))
 
 	for i, val := range config.FilterValue {
 		properties[i] = notionapi.PropertyFilter{
@@ -31,9 +31,7 @@ func filterFromConfig(config notion_blog.BlogConfig) *notionapi.CompoundFilter {
 		}
 	}
 
-	return &notionapi.CompoundFilter{
-		notionapi.FilterOperatorOR: properties,
-	}
+	return properties
 }
 
 func generateArticleName(title string, date time.Time, config notion_blog.BlogConfig) string {
@@ -134,8 +132,8 @@ func ParseAndGenerate(config notion_blog.BlogConfig) error {
 	spin := spinner.StartNew("Querying Notion database")
 	q, err := client.Database.Query(context.Background(), notionapi.DatabaseID(config.DatabaseID),
 		&notionapi.DatabaseQueryRequest{
-			CompoundFilter: filterFromConfig(config),
-			PageSize:       100,
+			Filter:   filterFromConfig(config),
+			PageSize: 100,
 		})
 	spin.Stop()
 	if err != nil {
@@ -154,7 +152,7 @@ func ParseAndGenerate(config notion_blog.BlogConfig) error {
 	for i, res := range q.Results {
 		title := res.Properties["Name"].(*notionapi.TitleProperty).Title[0].PlainText
 
-		fmt.Printf("-- Article [%d/%d] --\n", i+1, len(q.Results))
+		fmt.Printf("-- Article [%d/%d]: %s --\n", i+1, len(q.Results), title)
 		spin = spinner.StartNew("Getting blocks tree")
 		// Get page blocks tree
 		blocks, err := recursiveGetChildren(client, notionapi.BlockID(res.ID))
