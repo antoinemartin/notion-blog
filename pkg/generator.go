@@ -109,7 +109,7 @@ func ConvertRichText(t []notionapi.RichText) string {
 	return strings.TrimSpace(buf.String())
 }
 
-func getImage(imgURL string, config BlogConfig) (_ string, err error) {
+func getImage(imgURL string, uniqueId string, config BlogConfig) (_ string, err error) {
 	// Split image url to get host and file name
 	splittedURL, err := url.Parse(imgURL)
 	if err != nil {
@@ -121,6 +121,9 @@ func getImage(imgURL string, config BlogConfig) (_ string, err error) {
 	filePath = filePath[strings.LastIndex(filePath, "/")+1:]
 
 	name := fmt.Sprintf("%s_%s", splittedURL.Hostname(), filePath)
+	if uniqueId != "" {
+		name = fmt.Sprintf("%s%s", uniqueId, filepath.Ext(filePath))
+	}
 
 	spin := spinner.StartNew(fmt.Sprintf("Getting image `%s`", name))
 	defer func() {
@@ -312,7 +315,7 @@ func GenerateContent(w io.Writer, blocks []notionapi.Block, config BlogConfig, p
 				append([]string{"    "}, prefixes...)...)
 
 		case *notionapi.ImageBlock:
-			src, _ := getImage(b.Image.File.URL, config)
+			src, _ := getImage(b.Image.File.URL, b.ID.String(), config)
 			caption := ConvertRichText(b.Image.Caption)
 			if caption == "" {
 				caption = "image"
