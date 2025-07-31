@@ -127,15 +127,15 @@ func recursiveGetChildren(client *notionapi.Client, blockID notionapi.BlockID) (
 }
 
 func ParseAndGenerate(config notion_blog.BlogConfig) error {
+	log.Println("Creating API client...")
 	client := notionapi.NewClient(notionapi.Token(os.Getenv("NOTION_SECRET")))
 
-	spin := spinner.StartNew("Querying Notion database")
+	log.Printf("Querying Notion database id %s...\n", config.DatabaseID)
 	q, err := client.Database.Query(context.Background(), notionapi.DatabaseID(config.DatabaseID),
 		&notionapi.DatabaseQueryRequest{
 			Filter:   filterFromConfig(config),
 			PageSize: 100,
 		})
-	spin.Stop()
 	if err != nil {
 		return fmt.Errorf("❌ Querying Notion database: %s", err)
 	}
@@ -153,7 +153,7 @@ func ParseAndGenerate(config notion_blog.BlogConfig) error {
 		title := res.Properties["Name"].(*notionapi.TitleProperty).Title[0].PlainText
 
 		fmt.Printf("-- Article [%d/%d]: %s --\n", i+1, len(q.Results), title)
-		spin = spinner.StartNew("Getting blocks tree")
+		spin := spinner.StartNew("Getting blocks tree")
 		// Get page blocks tree
 		blocks, err := recursiveGetChildren(client, notionapi.BlockID(res.ID))
 		spin.Stop()

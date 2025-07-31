@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"log"
+	"os"
 
 	"notion-blog/internal"
 	notion_blog "notion-blog/pkg"
@@ -31,11 +32,17 @@ func main() {
 	if err != nil {
 		log.Println("No .env file provided")
 	}
+	// check that the environment contains NOTION_SECRET
+	if os.Getenv("NOTION_SECRET") == "" {
+		log.Fatal("NOTION_SECRET environment variable is not set")
+	}
 
 	log.Println("Parsing command-line flags...")
 	parseFlagsConfig()
 
 	log.Printf("Config: %+v", config)
-	log.Println("Starting Notion Blog generation...")
-	internal.ParseAndGenerate(config)
+	log.Printf("Starting Notion Blog generation on database id %s...", config.DatabaseID)
+	if err := internal.ParseAndGenerate(config); err != nil {
+		log.Fatal(err)
+	}
 }
