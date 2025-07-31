@@ -188,7 +188,24 @@ func ParseAndGenerate(config notion_blog.BlogConfig) error {
 	// Set GITHUB_ACTIONS info variables
 	// https://docs.github.com/en/actions/learn-github-actions/workflow-commands-for-github-actions
 	if os.Getenv("GITHUB_ACTIONS") == "true" {
-		fmt.Printf("::set-output name=articles_published::%d\n", changed)
+		// Get the GITHUB_OUTPUT environment variable
+		outputFile := os.Getenv("GITHUB_OUTPUT")
+		if outputFile == "" {
+			log.Println("GITHUB_OUTPUT environment variable is not set, skipping output file writing")
+			return nil
+		}
+		// Open the file for writing
+		f, err := os.OpenFile(outputFile, os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			return fmt.Errorf("could not open GITHUB_OUTPUT file: %s", err)
+		}
+		defer f.Close()
+		// Write the number of articles published to the file
+		if _, err := f.WriteString(fmt.Sprintf("articles_published=%d\n", changed)); err != nil {
+			return fmt.Errorf("could not write to GITHUB_OUTPUT file: %s", err)
+		}
+		// Also print to console for visibility
+		log.Printf("Number of articles published: %d\n", changed)
 	}
 
 	return nil
