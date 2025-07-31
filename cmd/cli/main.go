@@ -32,7 +32,10 @@ func main() {
 		log.Println("No .env file provided")
 	}
 
+	log.Println("Parsing command-line flags...")
 	parseFlagsConfig()
 
+	log.Printf("Config: %+v", config)
+	log.Println("Starting Notion Blog generation...")
 	internal.ParseAndGenerate(config)
 }
