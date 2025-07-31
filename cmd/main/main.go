@@ -27,7 +27,10 @@ func main() {
 		log.Println("No .env file provided")
 	}
 
+	log.Println("Parsing JSON config file...")
 	parseJSONConfig()
 
+	log.Printf("Config: %+v", config)
+	log.Println("Starting Notion Blog generation...")
 	internal.ParseAndGenerate(config)
 }

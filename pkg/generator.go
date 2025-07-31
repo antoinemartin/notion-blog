@@ -348,7 +348,7 @@ func GenerateContent(w io.Writer, blocks []notionapi.Block, config BlogConfig, p
 				fmt.Println("ℹ Unsupported block type")
 			}
 		case *notionapi.DividerBlock:
-			fprintln(w, prefixes, "<!-- more -->\n")
+			fprintln(w, prefixes, "<!--more-->\n")
 		default:
 			fmt.Println("ℹ Unimplemented block", b.GetType())
 		}

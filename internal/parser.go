@@ -139,7 +139,7 @@ func ParseAndGenerate(config notion_blog.BlogConfig) error {
 	if err != nil {
 		return fmt.Errorf("❌ Querying Notion database: %s", err)
 	}
-	fmt.Println("✔ Querying Notion database: Completed")
+	fmt.Printf("✔ Querying Notion database: Completed with Match Count: %d\n", len(q.Results))
 
 	err = os.MkdirAll(config.ContentFolder, 0777)
 	if err != nil {
